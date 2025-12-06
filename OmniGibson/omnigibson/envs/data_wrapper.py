@@ -202,6 +202,14 @@ class DataWrapper(EnvironmentWrapper):
         traj_grp = data_grp.create_group(traj_grp_name)
         traj_grp.attrs["num_samples"] = len(traj_data)
 
+        # # Add metadata for health obs
+        # health_list = []
+        # for obj in self.scene.objects:
+        #     if hasattr(obj, "update_health"):
+        #         for link_name, health in obj.link_healths.items():
+        #             health_list.append(f"{obj.name}@{link_name}")
+        # traj_grp.attrs["health_list_link_names"] = health_list
+
         # Create the data dictionary -- this will dynamically add keys as we iterate through our trajectory
         # We need to do this because we're not guaranteed to have a full set of keys at every trajectory step; e.g.
         # if the first step only has state or observations but no actions
@@ -226,7 +234,19 @@ class DataWrapper(EnvironmentWrapper):
             if k in nested_keys:
                 obs_grp = traj_grp.create_group(k)
                 for mod, traj_mod_data in dat.items():
-                    obs_grp.create_dataset(mod, data=th.stack(traj_mod_data, dim=0).cpu(), **self.compression)
+                    print("k: ", k, "mod: ", mod)
+                    # if mod == "object_health_states":
+                    #     breakpoint()
+                    try:
+                        if type(traj_mod_data[0]) == str:
+                            dt = h5py.string_dtype(encoding="utf-8")
+                            dset = obs_grp.create_dataset(mod, shape=(len(traj_mod_data),), dtype=dt)
+                            dset[...] = traj_mod_data
+                        else:
+                            obs_grp.create_dataset(mod, data=th.stack(traj_mod_data, dim=0).cpu(), **self.compression)
+                    except Exception as e:
+                        print("Error creating dataset for mod: ", mod, "error: ", e)
+                        breakpoint()
             else:
                 traj_data = th.stack(dat, dim=0) if isinstance(dat[0], th.Tensor) else th.tensor(dat)
                 traj_grp.create_dataset(k, data=traj_data, **self.compression)
@@ -261,7 +281,7 @@ class DataWrapper(EnvironmentWrapper):
         # Only save successful demos and if actually recording
         if self.should_save_current_episode:
             traj_grp_name = f"demo_{self.traj_count}"
-            traj_grp = self.process_traj_to_hdf5(self.current_traj_history, traj_grp_name, nested_keys=["obs"])
+            traj_grp = self.process_traj_to_hdf5(self.current_traj_history, traj_grp_name, nested_keys=["obs", "info"])
             self.traj_count += 1
             self.postprocess_traj_group(traj_grp)
 
@@ -828,8 +848,12 @@ class DataPlaybackWrapper(DataWrapper):
         if external_sensors_config is not None:
             config["env"]["external_sensors"] = external_sensors_config
 
-        # Load env
-        env = og.Environment(configs=config)
+        # # Load env
+        # # TODO: Find a better way of using DamageableEnvironment for data playback.
+        # # Ideally, we don't want to change OG source code to support this.
+        # # env = og.Environment(configs=config)
+        # from safety_benchmark.damageable_env import DamageableEnvironment
+        # env = DamageableEnvironment(configs=config)
 
         # Optionally include the desired environment wrapper specified in the config
         if include_env_wrapper:
@@ -958,6 +982,7 @@ class DataPlaybackWrapper(DataWrapper):
         step_data["reward"] = reward
         step_data["terminated"] = terminated
         step_data["truncated"] = truncated
+        # step_data["info"] = info
         return step_data
 
     def playback_episode(self, episode_id, record_data=True, video_writers=None, callback=None, replay_for_annotation=False, break_after_n_steps=100):
@@ -997,6 +1022,9 @@ class DataPlaybackWrapper(DataWrapper):
         # Reset environment and update this to be the new initial state
         self.scene.restore(self.scene_file, update_initial_file=True)
 
+        # # TODO: Find another place to do this
+        # self.set_object_params()
+
         # Reset object attributes from the stored metadata
         with og.sim.stopped():
             for attr, vals in init_metadata.items():
@@ -1022,6 +1050,9 @@ class DataPlaybackWrapper(DataWrapper):
                         )
 
         # Restore to initial state
+        # Ensure simulator is playing before loading state (required by load_state)
+        if not og.sim.is_playing():
+            og.sim.play()
         og.sim.load_state(state[0, : int(state_size[0])], serialized=True)
         if callback is not None:
             result.append(callback(action=action[0]))
@@ -1045,12 +1076,17 @@ class DataPlaybackWrapper(DataWrapper):
         for i, (a, s, ss, r, te, tr) in enumerate(
             zip(action, state[1:], state_size[1:], reward, terminated, truncated)
         ):
+            print(f"================= simulation step {i} =================")
             if replay_for_annotation:
                 if i % break_after_n_steps == 0:
                     print(f"================= simulation step {i} =================")
                     # Note: You can use the following to step the rendering in OG: for _ in range(500): og.sim.render()
                     # And then you can click on objects in the viewer to get the OG specific name of the object
                     breakpoint()
+
+            # # remove later
+            # if i > 100:
+            #     break
 
             # Execute any transitions that should occur at this current step
             if str(i) in transitions:
@@ -1072,12 +1108,18 @@ class DataPlaybackWrapper(DataWrapper):
             
             # Restore the sim state, and take a very small step with the action to make sure physics are
             # properly propagated after the sim state update
+            # Ensure simulator is playing before loading state (required by load_state)
+            if not og.sim.is_playing():
+                og.sim.play()
             og.sim.load_state(s[: int(ss)], serialized=True)
             if callback is not None:
                 result.append(callback(action=a))
 
             # Restore the sim state, and take a very small step with the action to make sure physics are
             # properly propagated after the sim state update
+            # Ensure simulator is playing before loading state (required by load_state)
+            if not og.sim.is_playing():
+                og.sim.play()
             og.sim.load_state(s[: int(ss)], serialized=True)
             if not self.include_contacts:
                 # When all objects/systems are visual-only, keep them still on every step
