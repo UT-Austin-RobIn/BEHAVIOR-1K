@@ -55,6 +55,8 @@ class ModifiedParticles(RelativeObjectState):
     @property
     def state_size(self):
         # Two entries per system (name + count) + number of systems
+        if self.particle_counts is None:
+            return 0
         return len(self.particle_counts) * 2 + 1
 
     def _dump_state(self):
@@ -228,6 +230,8 @@ class Saturated(RelativeObjectState, BooleanStateMixin):
 
     @property
     def state_size(self):
+        if self._limits is None:
+            return 0
         # n whitelist limits + default visual particle limit + default physical particle limit
         # + limit per whitelist entry * 2 (UUID, value)
         return 3 + len(self._limits) * 2
