@@ -1025,6 +1025,11 @@ class DataPlaybackWrapper(DataWrapper):
         for i, (a, s, ss, r, te, tr) in enumerate(
             zip(action, state[1:], state_size[1:], reward, terminated, truncated)
         ):
+            
+            # # To debug
+            # if i > 100:
+            #     break
+            
             # Execute any transitions that should occur at this current step
             if str(i) in transitions:
                 cur_transitions = transitions[str(i)]
@@ -1068,6 +1073,10 @@ class DataPlaybackWrapper(DataWrapper):
                     truncated=tr,
                     info=info,
                 )
+                # Playback does not save states by default, so adding it here
+                state = og.sim.dump_state(serialized=True)
+                step_data["state"] = state
+
                 if self.flush_every_n_steps > 0:
                     if i == 0:
                         self.current_traj_grp, self.traj_dsets = self.allocate_traj_to_hdf5(
