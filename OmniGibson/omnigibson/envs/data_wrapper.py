@@ -37,6 +37,27 @@ except ImportError:
 h5py.get_config().track_order = True
 
 
+def json_default(o):
+    # numpy scalar
+    if isinstance(o, (np.float32, np.float64, np.int32, np.int64)):
+        return o.item()
+    # numpy array
+    if isinstance(o, np.ndarray):
+        return o.tolist()
+    # torch tensor
+    if isinstance(o, th.Tensor):
+        return o.tolist()
+    # tuple → list
+    if isinstance(o, tuple):
+        return list(o)
+    # fallback: try item()
+    if hasattr(o, "item"):
+        try:
+            return o.item()
+        except:
+            pass
+    raise TypeError(f"Object of type {type(o)} not JSON serializable")
+
 class DataWrapper(EnvironmentWrapper):
     """
     An OmniGibson environment wrapper for writing data to an HDF5 file.
@@ -224,6 +245,14 @@ class DataWrapper(EnvironmentWrapper):
                         data[k][mod].append(step_mod_data)
                 else:
                     data[k].append(v)
+
+        # Convert info from dict to json string for saving to hdf5
+        for k, v in data.items():
+            if k == "info":
+                for mod, traj_mod_data in v.items():
+                    # data[k][mod] = json.dumps(traj_mod_data, default=json_default)
+                    # Convert each timestep's info to a JSON string, not the entire list
+                    data[k][mod] = [json.dumps(item, default=json_default) for item in traj_mod_data]
 
         for k, dat in data.items():
             # Skip over all entries that have no data
