@@ -219,14 +219,18 @@ class DataWrapper(EnvironmentWrapper):
             if not dat:
                 continue
 
-            # Create datasets for all keys with valid data
-            if k in nested_keys:
-                obs_grp = traj_grp.create_group(k)
-                for mod, traj_mod_data in dat.items():
-                    obs_grp.create_dataset(mod, data=th.stack(traj_mod_data, dim=0).cpu(), **self.compression)
-            else:
-                traj_data = th.stack(dat, dim=0) if isinstance(dat[0], th.Tensor) else th.tensor(dat)
-                traj_grp.create_dataset(k, data=traj_data, **self.compression)
+            try:
+                # Create datasets for all keys with valid data
+                if k in nested_keys:
+                    obs_grp = traj_grp.create_group(k)
+                    for mod, traj_mod_data in dat.items():
+                        obs_grp.create_dataset(mod, data=th.stack(traj_mod_data, dim=0).cpu(), **self.compression)
+                else:
+                    traj_data = th.stack(dat, dim=0) if isinstance(dat[0], th.Tensor) else th.tensor(dat)
+                    traj_grp.create_dataset(k, data=traj_data, **self.compression)
+            except Exception as e:
+                print("Error: ", e)
+                breakpoint()
 
         return traj_grp
 
