@@ -257,6 +257,15 @@ class DataWrapper(EnvironmentWrapper):
         """
         # Only save successful demos and if actually recording
         if self.should_save_current_episode:
+
+            if "state" in self.current_traj_history[0]:
+                # First pad all state values to be the same max (uniform) size
+                for step_data in self.current_traj_history:
+                    state = step_data["state"]
+                    padded_state = th.zeros(self.max_state_size, dtype=th.float32)
+                    padded_state[: len(state)] = state
+                    step_data["state"] = padded_state
+
             traj_grp_name = f"demo_{self.traj_count}"
             traj_grp = self.process_traj_to_hdf5(self.current_traj_history, traj_grp_name, nested_keys=["obs"])
             self.traj_count += 1
@@ -919,7 +928,8 @@ class DataPlaybackWrapper(DataWrapper):
         self.traj_dsets = dict()
         self.include_robot_control = include_robot_control
         self.include_contacts = include_contacts
-
+        self.max_state_size = 0
+        
         # Run super
         super().__init__(
             env=env,
@@ -1020,6 +1030,10 @@ class DataPlaybackWrapper(DataWrapper):
                 action=action[0], n_render_iterations=self.n_render_iterations + first_time_load_n_iteration
             )
             step_data = {"obs": self._process_obs(obs=self.current_obs, info=init_info)}
+            curr_state = og.sim.dump_state(serialized=True)
+            step_data["state"] = curr_state
+            step_data["state_size"] = len(curr_state)
+            self.max_state_size = max(self.max_state_size, len(curr_state))
             self.current_traj_history.append(step_data)
 
         for i, (a, s, ss, r, te, tr) in enumerate(
@@ -1074,8 +1088,10 @@ class DataPlaybackWrapper(DataWrapper):
                     info=info,
                 )
                 # Playback does not save states by default, so adding it here
-                state = og.sim.dump_state(serialized=True)
-                step_data["state"] = state
+                curr_state = og.sim.dump_state(serialized=True)
+                step_data["state"] = curr_state
+                step_data["state_size"] = len(curr_state)
+                self.max_state_size = max(self.max_state_size, len(curr_state))
 
                 if self.flush_every_n_steps > 0:
                     if i == 0:
@@ -1241,3 +1257,5 @@ class DataPlaybackWrapper(DataWrapper):
             self.traj_count += 1
             self.current_episode_step_count = 0
             self.current_traj_history = []
+
+        self.max_state_size = 0
