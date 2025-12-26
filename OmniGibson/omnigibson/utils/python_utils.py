@@ -143,6 +143,12 @@ def create_object_from_init_info(init_info):
     Returns:
         any: Newly created object.
     """
+    from omnigibson.objects import REGISTERED_OBJECTS
+    # TODO: Find a better place to do this. Ideally we don't want to change OG code
+    # To set the object to be an object of Damageable... class
+    init_info["class_module"] = REGISTERED_OBJECTS[init_info["class_name"]].__module__
+    init_info["class_name"] = REGISTERED_OBJECTS[init_info["class_name"]].__name__
+
     module = import_module(init_info["class_module"])
     cls = getattr(module, init_info["class_name"])
     return cls(**init_info["args"], **init_info.get("kwargs", {}))
