@@ -419,6 +419,7 @@ class AttachedTo(
             attached_obj = self.obj.scene.object_registry("uuid", uuid)
             assert attached_obj is not None, "attached_obj_uuid does not match any object in the scene."
 
+        self.parent = getattr(self, "parent", None)
         if self.parent != attached_obj:
             # If it's currently attached to something else, detach.
             if self.parent is not None:
