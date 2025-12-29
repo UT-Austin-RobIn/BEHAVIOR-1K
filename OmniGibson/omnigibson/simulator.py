@@ -959,9 +959,14 @@ def _launch_simulator(*args, **kwargs):
             for callback in self._callbacks_on_remove_obj.values():
                 callback(obj)
 
-            # pop all link ids
-            for link in obj.links.values():
-                self._link_id_to_objects.pop(lazy.pxr.PhysicsSchemaTools.sdfPathToInt(link.prim_path))
+            try:
+                # pop all link ids
+                for link in obj.links.values():
+                    link_id = lazy.pxr.PhysicsSchemaTools.sdfPathToInt(link.prim_path)
+                    self._link_id_to_objects.pop(link_id, None)  # Returns None if key doesn't exist
+            except Exception as e:
+                print(f"Error popping link ids: {e}")
+                breakpoint()
 
             # If it was queued up to be initialized, remove it from the queue as well
             for i, initialize_obj in enumerate(self._objects_to_initialize):
