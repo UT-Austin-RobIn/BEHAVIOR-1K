@@ -343,7 +343,7 @@ class DataWrapper(EnvironmentWrapper):
         """
         group.attrs[name] = json.dumps(data, cls=TorchEncoder) if isinstance(data, dict) else data
 
-    def save_data(self):
+    def save_data(self, episode_infos=None):
         """
         Save collected trajectories as a hdf5 file in the robomimic format
         """
@@ -359,6 +359,8 @@ class DataWrapper(EnvironmentWrapper):
 
             self.hdf5_file["data"].attrs["n_episodes"] = self.traj_count
             self.hdf5_file["data"].attrs["n_steps"] = self.step_count
+            if episode_infos is not None:
+                self.hdf5_file["data"].attrs["episode_infos"] = json.dumps(episode_infos, default=json_default)
             self.hdf5_file.close()
 
 
