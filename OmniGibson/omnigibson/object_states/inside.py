@@ -48,17 +48,26 @@ class Inside(RelativeObjectState, KinematicsMixin, BooleanStateMixin):
         inner_object_pos = (aabb_lower + aabb_upper) / 2.0
         outer_object_aabb_lo, outer_object_aabb_hi = other.states[AABB].get_value()
 
-        if not (
-            th.le(outer_object_aabb_lo, inner_object_pos).all() and th.le(inner_object_pos, outer_object_aabb_hi).all()
-        ):
-            return False
-
-        # TODO: Consider using the collision boundary points.
-        # points = self.obj.collision_boundary_points_world
-        points = inner_object_pos.reshape(1, 3)
-        in_volume = th.zeros(points.shape[0], dtype=th.bool)
+        # if CONTAINER_META_LINK_TYPES meta link exists, do a check of that, else just check the AABB
+        meta_link_exists = False
         for link in other.links.values():
             if link.is_meta_link and link.meta_link_type in macros.object_states.contains.CONTAINER_META_LINK_TYPES:
-                in_volume |= link.check_points_in_volume(points)
+                meta_link_exists = True
+        
+        if not meta_link_exists:
+            if (
+                th.le(outer_object_aabb_lo, inner_object_pos).all() and th.le(inner_object_pos, outer_object_aabb_hi).all()
+            ):
+                return True
+            else:
+                return False
+        else:
+            # TODO: Consider using the collision boundary points.
+            # points = self.obj.collision_boundary_points_world
+            points = inner_object_pos.reshape(1, 3)
+            in_volume = th.zeros(points.shape[0], dtype=th.bool)
+            for link in other.links.values():
+                if link.is_meta_link and link.meta_link_type in macros.object_states.contains.CONTAINER_META_LINK_TYPES:
+                    in_volume |= link.check_points_in_volume(points)
 
-        return th.any(in_volume).item()
+            return th.any(in_volume).item()
