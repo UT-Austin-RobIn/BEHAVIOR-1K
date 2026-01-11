@@ -303,13 +303,14 @@ class DataWrapper(EnvironmentWrapper):
         # Default is no-op
         pass
 
-    def flush_current_traj(self):
+    def flush_current_traj(self, traj_grp_name=None):
         """
         Flush current trajectory data
         """
         # Only save successful demos and if actually recording
         if self.should_save_current_episode:
-            traj_grp_name = f"demo_{self.traj_count}"
+            if traj_grp_name is None:
+                traj_grp_name = f"demo_{self.traj_count}"
             traj_grp = self.process_traj_to_hdf5(self.current_traj_history, traj_grp_name, nested_keys=["obs", "info"])
             self.traj_count += 1
             self.postprocess_traj_group(traj_grp)
@@ -674,9 +675,9 @@ class DataCollectionWrapper(DataWrapper):
 
         return traj_grp
 
-    def flush_current_traj(self):
+    def flush_current_traj(self, traj_grp_name=None):
         # Call super first
-        super().flush_current_traj()
+        super().flush_current_traj(traj_grp_name=traj_grp_name)
 
         # Clear transition buffer and max state size
         self.max_state_size = 0
@@ -1500,13 +1501,13 @@ class DataPlaybackWrapper(DataWrapper):
         # Reset the current trajectory history
         self.current_traj_history = []
 
-    def flush_current_traj(self):
+    def flush_current_traj(self, traj_grp_name=None):
         """
         Flush current trajectory data
         For playback, we assume that all data needs to be stored.
         """
         if self.flush_every_n_steps == 0:
-            super().flush_current_traj()
+            super().flush_current_traj(traj_grp_name=traj_grp_name)
         else:
             self.postprocess_traj_group(self.current_traj_grp)
             self.flush_current_file()
