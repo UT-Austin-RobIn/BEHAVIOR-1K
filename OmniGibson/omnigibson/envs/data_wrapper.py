@@ -1373,6 +1373,7 @@ class DataPlaybackWrapper(DataWrapper):
         results = []
         if demo_ids is None:
             for episode_id in range(self.input_hdf5["data"].attrs["n_episodes"]):
+                time_start = time.time()
                 results.append(
                     self.playback_episode(
                         episode_id=episode_id,
@@ -1382,6 +1383,8 @@ class DataPlaybackWrapper(DataWrapper):
                         replay_for_annotation=replay_for_annotation,
                     )
                 )
+                time_end = time.time()
+                print(f"Episode {episode_id} done, time: {time_end - time_start} seconds")
         else:
             for episode_id in demo_ids:
                 results.append(
