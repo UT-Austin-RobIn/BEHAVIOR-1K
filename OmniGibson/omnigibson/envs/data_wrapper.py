@@ -36,6 +36,22 @@ except ImportError:
 
 h5py.get_config().track_order = True
 
+def flatten_obs(obs, parent_key=None, sep="::"):
+    items = {}
+
+    try:
+        for k, v in obs.items():
+            new_key = k if parent_key is None else f"{parent_key}{sep}{k}"
+
+            if isinstance(v, dict):
+                items.update(flatten_obs(v, new_key, sep))
+            else:
+                items[new_key] = v
+
+    except Exception as e:
+        print("Error flattening obs: ", e)
+        breakpoint()
+    return items
 
 def json_default(o):
     # numpy scalar
@@ -113,7 +129,7 @@ class DataWrapper(EnvironmentWrapper):
         # Run super
         super().__init__(env=env)
 
-    def step(self, action, n_render_iterations=1):
+    def step(self, action, n_render_iterations=1, episode_step_count=0, init_skip_steps=0):
         """
         Run the environment step() function and collect data
 
@@ -133,7 +149,7 @@ class DataWrapper(EnvironmentWrapper):
         if isinstance(action, dict):
             action = th.cat([act for act in action.values()])
 
-        next_obs, reward, terminated, truncated, info = self.env.step(action, n_render_iterations=n_render_iterations)
+        next_obs, reward, terminated, truncated, info = self.env.step(action, n_render_iterations=n_render_iterations, episode_step_count=episode_step_count, init_skip_steps=init_skip_steps)
         self.step_count += 1
 
         self._record_step_trajectory(action, next_obs, reward, terminated, truncated, info)
@@ -564,6 +580,7 @@ class DataCollectionWrapper(DataWrapper):
         Args:
             viewport_camera_path (str): Prim path to the camera to use for the viewer for data collection
         """
+        # TODO: Change here for pour water task
         # Disable all render products to save on speed
         # See https://forums.developer.nvidia.com/t/speeding-up-simulation-2023-1-1/300072/6
         for sensor in VisionSensor.SENSORS.values():
@@ -612,6 +629,9 @@ class DataCollectionWrapper(DataWrapper):
         # Call super first
         init_obs, init_info = super().reset()
 
+        # TODO: Change here for pour water task
+        # init_obs = flatten_obs(init_obs)
+
         # Make sure all objects are awake to begin to guarantee we save their initial states
         for obj in self.scene.objects:
             obj.wake()
@@ -621,6 +641,9 @@ class DataCollectionWrapper(DataWrapper):
         step_data = {
             "state": state,
             "state_size": len(state),
+            # TODO: Change here for pour water task
+            # "obs": init_obs,
+            # "info": init_info,
         }
         self.current_traj_history.append(step_data)
 
@@ -650,6 +673,11 @@ class DataCollectionWrapper(DataWrapper):
         # Store dumped state, reward, terminated, truncated
         step_data = dict()
         state = og.sim.dump_state(serialized=True)
+        
+        # TODO: Change here for pour water task
+        # obs = flatten_obs(obs)
+        # step_data["obs"] = self._process_obs(obs=obs)
+        # step_data["info"] = info
         step_data["action"] = action
         step_data["state"] = state
         step_data["state_size"] = len(state)
